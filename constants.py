@@ -71,8 +71,3 @@ REFRESH_AUDIO = 'Вы в режиме обработки аудио.\n\n' \
                 'Формат аудио: <i>{}</i>\n' \
                 'Длина: <i>{}</i>\n\n' \
                 'Чтобы сбросить файл, напишите /start или /import.'
-
-
-class TooFastQuotaResetException(BaseException):
-    def __init__(self):
-        super().__init__()
