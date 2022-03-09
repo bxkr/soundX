@@ -13,6 +13,7 @@ class Data:
                 'quota': 50,
                 'last_quota_reset': datetime.datetime.now().timestamp(),
                 'file_id': None,
+                'ext': None,
                 'files': 0
             }
         json.dump(current, open(DATA_PATH, 'w'))
