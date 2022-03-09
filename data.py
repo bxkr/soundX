@@ -4,16 +4,22 @@ from constants import DATA_PATH
 
 
 class Data:
+    suid: str
+    quota: float | int
+    mode: str | None
+    last_quota_reset: float
+    files: int
+    file_id: int
+    ext: str | None
+    old_name: str | None
+
     def __init__(self, uid: int):
         current = json.load(open(DATA_PATH, 'r'))
         self.suid = str(uid)
         if self.suid not in current:
             current[self.suid] = {
-                'mode': None,
                 'quota': 50,
                 'last_quota_reset': datetime.datetime.now().timestamp(),
-                'file_id': None,
-                'ext': None,
                 'files': 0
             }
         json.dump(current, open(DATA_PATH, 'w'))
@@ -30,3 +36,9 @@ class Data:
         current = json.load(open(DATA_PATH, 'r'))
         current[self.suid][key] = value
         json.dump(current, open(DATA_PATH, 'w'))
+
+    def __delattr__(self, item):
+        current = json.load(open(DATA_PATH, 'r'))
+        if item in current[self.suid]:
+            del current[self.suid][item]
+            json.dump(current, open(DATA_PATH, 'w'))
