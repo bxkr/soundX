@@ -97,8 +97,8 @@ async def import_audio(message: Message):
 async def audio_refresh(message: Message):
     data = Data(message.from_user.id)
     song = AudioSegment.from_file(__file__.replace('main.py', f'user{data.suid}_{data.file_id}.{data.ext}'), data.ext)
-    await message.answer(REFRESH_AUDIO.format(data.file_id, data.ext, min_sec(song.duration_seconds)), reply_markup=
-                         EXPORT_KEYBOARD)
+    await message.answer(REFRESH_AUDIO.format(data.file_id, data.old_name, data.ext, min_sec(song.duration_seconds)),
+                         reply_markup=EXPORT_KEYBOARD, parse_mode='html')
 
 
 @dp.message((F.text == TRIM) & F.from_user.id.func(lambda uid: Data(uid).mode == 'editing'))
@@ -159,7 +159,8 @@ async def export(callback_query: CallbackQuery):
     await callback_query.message.answer_document(document)
 
 
-@dp.message()
+@dp.message(F.text.in_([PITCH, VOLUME]) &
+            F.from_user.id.func(lambda uid: (Data(uid).mode is not None) and Data(uid).mode != 'import'))
 async def not_implemented(message: Message):
     await message.answer('not implemented')
 

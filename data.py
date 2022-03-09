@@ -28,7 +28,8 @@ class Data:
         if item == 'suid':
             return object.__getattribute__(self, item)
         current = json.load(open(DATA_PATH, 'r'))
-        return current[self.suid][item]
+        if item in current[self.suid]:
+            return current[self.suid][item]
 
     def __setattr__(self, key, value):
         if key == 'suid':
