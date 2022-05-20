@@ -8,7 +8,7 @@ from utils import *
 from subprocess import Popen
 import re
 
-from pydub import AudioSegment
+from pydub import AudioSegment, effects
 
 with open(__file__.replace('main.py', 'token'), 'r') as f:
     bot = Bot(f.read())
@@ -29,6 +29,13 @@ def reset_data(data: Data):
     del data.file_id
     del data.ext
     del data.old_name
+
+
+def pop_files(method: 0 | 1, data: Data):
+    if method == 0:
+        rename(f'user{data.suid}_{data.file_id}.{data.ext}', f'user{data.suid}_{data.file_id}_old.{data.ext}')
+    return __file__.replace('main.py', f'user{data.suid}_{data.file_id}_old.{data.ext}') if method == 0 else __file__.\
+        replace('main.py', f'user{data.suid}_{data.file_id}.{data.ext}')
 
 
 @dp.message(~F.from_user.id.in_(ALLOWED_IDS))
@@ -109,7 +116,7 @@ async def trim_mode(message: Message):
     await message.answer(TRIM_SEND, reply_markup=SIMPLE_KEYBOARD(CANCEL + C_TRIMMING), parse_mode='html')
 
 
-@dp.message(F.from_user.id.func(lambda uid: Data(uid).mode in ['trim', 'pitch', 'volume']) &
+@dp.message(F.from_user.id.func(lambda uid: Data(uid).mode in ['trim', 'speedup', 'volume']) &
             (F.text.startswith(CANCEL) | (F.text == '/cancel')))
 async def return_to_editing(message: Message):
     data = Data(message.from_user.id)
@@ -180,9 +187,7 @@ async def volume(callback_query: CallbackQuery):
         return
     negative = '-' in callback_query.data
     coefficient = ((-percent if negative else percent)/100)+1
-    rename(f'user{data.suid}_{data.file_id}.{data.ext}', f'user{data.suid}_{data.file_id}_old.{data.ext}')
-    old_file_name = __file__.replace('main.py', f'user{data.suid}_{data.file_id}_old.{data.ext}')
-    new_file_name = __file__.replace('main.py', f'user{data.suid}_{data.file_id}.{data.ext}')
+    old_file_name, new_file_name = pop_files(0, data), pop_files(1, data)
     p = Popen(f'ffmpeg -i {old_file_name} -filter:a "volume={coefficient}" {new_file_name}')
     while True:
         if p.poll() is not None:
@@ -193,17 +198,40 @@ async def volume(callback_query: CallbackQuery):
             break
 
 
+@dp.message((F.text == SPEEDUP) & F.from_user.id.func(lambda uid: Data(uid).mode == 'editing'))
+async def speedup_mode(message: Message):
+    data = Data(message.from_user.id)
+    data.mode = 'speedup'
+    await message.answer(SPEEDUP_SEND, reply_markup=SIMPLE_KEYBOARD(CANCEL + C_SPEEDUP), parse_mode='html')
+
+
+@dp.message(F.from_user.id.func(lambda uid: Data(uid).mode == 'speedup') & F.text.regexp('\d{1,3}%'))
+async def speedup_confirm(message: Message):
+    await message.answer(CONFIRM_SPEEDUP.format(message.text), reply_markup=CONFIRM_KEYBOARD('speedup' + message.text))
+
+
+@dp.callback_query(F.from_user.id.func(lambda uid: Data(uid).mode == 'speedup') &
+                   F.data.regexp('speedup?\d{1,3}%'))
+async def speedup(callback_query: CallbackQuery):
+    await callback_query.answer(CATCH_SPEEDUP)
+    data = Data(callback_query.from_user.id)
+    query = re.search(r'(\d{1,3})%', callback_query.data)
+    percent = int(query[1])
+    coefficient = percent/100+1
+    old_file_name, new_file_name = pop_files(0, data), pop_files(1, data)
+    new_song = effects.speedup(AudioSegment.from_file(old_file_name, data.ext), coefficient)
+    new_song.export(f'user{data.suid}_{data.file_id}.{data.ext}', data.ext)
+    remove(old_file_name)
+    await callback_query.message.answer(SPEEDUP_COMPLETED.format(100 + percent))
+    await return_to_menu(callback_query.message)
+    data.mode = 'editing'
+
+
 @dp.callback_query((F.data == 'export') & F.from_user.id.func(lambda uid: Data(uid).mode == 'editing'))
 async def export(callback_query: CallbackQuery):
     data = Data(callback_query.from_user.id)
     document = FSInputFile(f'user{data.suid}_{data.file_id}.{data.ext}', data.old_name)
     await callback_query.message.answer_document(document)
-
-
-@dp.message(F.text.in_([PITCH]) &
-            F.from_user.id.func(lambda uid: (Data(uid).mode is not None) and Data(uid).mode != 'import'))
-async def not_implemented(message: Message):
-    await message.answer('not implemented')
 
 
 def main() -> None:
