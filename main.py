@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, FSInputFile
 from constants import *
 from data import Data
 from utils import *
+from subprocess import Popen
 import re
 
 from pydub import AudioSegment
@@ -152,6 +153,46 @@ async def trim(callback_query: CallbackQuery):
     data.mode = 'editing'
 
 
+@dp.message((F.text == VOLUME) & F.from_user.id.func(lambda uid: Data(uid).mode == 'editing'))
+async def volume_mode(message: Message):
+    data = Data(message.from_user.id)
+    data.mode = 'volume'
+    await message.answer(VOLUME_SEND, reply_markup=SIMPLE_KEYBOARD(CANCEL + C_VOLUME), parse_mode='html')
+
+
+@dp.message(F.from_user.id.func(lambda uid: Data(uid).mode == 'volume') & F.text.regexp('-?\d{1,3}%'))
+async def volume_confirm(message: Message):
+    if message.text == '-100%':
+        await message.answer(ZERO_VOLUME, reply_markup=CONFIRM_KEYBOARD('volume' + message.text))
+        return
+    await message.answer(CONFIRM_VOLUME.format(message.text), reply_markup=CONFIRM_KEYBOARD('volume' + message.text))
+
+
+@dp.callback_query(F.from_user.id.func(lambda uid: Data(uid).mode == 'volume') &
+                   F.data.regexp('volume-?\d{1,3}%'))
+async def volume(callback_query: CallbackQuery):
+    await callback_query.answer(CATCH_VOLUME)
+    data = Data(callback_query.from_user.id)
+    query = re.search(r'-?(\d{1,3})%', callback_query.data)
+    percent = int(query[1])
+    if percent > 100:
+        await callback_query.message.answer(BIGGER_THAN_HUNDRED)
+        return
+    negative = '-' in callback_query.data
+    coefficient = ((-percent if negative else percent)/100)+1
+    rename(f'user{data.suid}_{data.file_id}.{data.ext}', f'user{data.suid}_{data.file_id}_old.{data.ext}')
+    old_file_name = __file__.replace('main.py', f'user{data.suid}_{data.file_id}_old.{data.ext}')
+    new_file_name = __file__.replace('main.py', f'user{data.suid}_{data.file_id}.{data.ext}')
+    p = Popen(f'ffmpeg -i {old_file_name} -filter:a "volume={coefficient}" {new_file_name}')
+    while True:
+        if p.poll() is not None:
+            remove(old_file_name)
+            await callback_query.message.answer(GAIN_COMPLETED.format(100-percent if negative else 100+percent))
+            await return_to_menu(callback_query.message)
+            data.mode = 'editing'
+            break
+
+
 @dp.callback_query((F.data == 'export') & F.from_user.id.func(lambda uid: Data(uid).mode == 'editing'))
 async def export(callback_query: CallbackQuery):
     data = Data(callback_query.from_user.id)
@@ -159,7 +200,7 @@ async def export(callback_query: CallbackQuery):
     await callback_query.message.answer_document(document)
 
 
-@dp.message(F.text.in_([PITCH, VOLUME]) &
+@dp.message(F.text.in_([PITCH]) &
             F.from_user.id.func(lambda uid: (Data(uid).mode is not None) and Data(uid).mode != 'import'))
 async def not_implemented(message: Message):
     await message.answer('not implemented')
