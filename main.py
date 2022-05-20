@@ -231,6 +231,7 @@ async def speedup(callback_query: CallbackQuery):
 async def export(callback_query: CallbackQuery):
     data = Data(callback_query.from_user.id)
     document = FSInputFile(f'user{data.suid}_{data.file_id}.{data.ext}', data.old_name)
+    await callback_query.answer()
     await callback_query.message.answer_document(document)
 
 
