@@ -34,6 +34,7 @@ class Data:
     def __setattr__(self, key, value):
         if key == 'suid':
             object.__setattr__(self, key, value)
+            return
         current = json.load(open(DATA_PATH, 'r'))
         current[self.suid][key] = value
         json.dump(current, open(DATA_PATH, 'w'))
